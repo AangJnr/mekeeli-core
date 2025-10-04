@@ -1,0 +1,29 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - .:/app
+      - /app/venv
+    env_file: .env.development
+    environment:
+      - ENVIRONMENT=development
+    command: uvicorn core.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+
+  ui:
+    build:
+      context: ./mekeeli-ui
+      dockerfile: ./mekeeli-ui/Dockerfile
+    volumes:
+      - ./mekeeli-ui:/app
+      - /app/node_modules
+    environment:
+      - API_URL=http://api:8000
+    command: npm run dev
+    ports:
+      - "3000:3000"
