@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:15
@@ -15,30 +13,27 @@ services:
       timeout: 5s
       retries: 5
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    restart: always
-    ports:
-      - "11434:11434"   # Ollama API port
-    volumes:
-      - ./volumes/ollama:/root/.ollama
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    # Ensure gemma3:4b is pulled when container starts
-    entrypoint: ["/bin/sh", "-c", "ollama pull gemma:3-4b && ollama serve"]
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   restart: always
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ./volumes/ollama:/root/.ollama
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   entrypoint: ["/bin/sh", "-c", "ollama pull gemma3:4b && ollama serve"]
 
   mekeeli-api:
     image: mekeeli/mekeeli-api:${MEKEELI_API_VERSION:-latest}
-    container_name: mekeeli-api
     restart: always
     depends_on:
       - db
       - ollama
-    env_file: .env
+    env_file: mekeeli-api/.env
     environment:
       - ENVIRONMENT=production
       - OLLAMA_URL=http://ollama:11434
@@ -46,17 +41,18 @@ services:
       - "8000:8000"
     volumes:
       - ./volumes/mekeeli_data:/app/data
+      - ./volumes/uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  ui:
+  mekeeli-ui:
     image: mekeeli/mekeeli-ui:${MEKEELI_UI_VERSION:-latest}
     restart: always
-    depends_on:
-      - mekeeli-api
+ #   depends_on:
+#      - mekeeli-api
     ports:
       - "3000:3000"
     environment:
@@ -66,4 +62,3 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-

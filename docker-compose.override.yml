@@ -1,29 +1,66 @@
-version: "3.9"
-
 services:
-  api:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
+  # disable Postgres locally (only runs in prod)
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    env_file: !reset
+      - .env.local
+    environment:  # Use this instead of env_file
+      - POSTGRES_USER=mekeeli
+      - POSTGRES_PASSWORD=mekeeli_pass
+      - POSTGRES_DB=mekeeli_db # Loads from project root
     volumes:
-      - .:/app
-      - /app/venv
-    env_file: .env.development
+      - postgres-data-dev:/var/lib/postgresql/data
+
+
+  # Optional: keep ollama for local testing, or comment out to mock
+  ollama:
+    profiles: ["prod"]
+
+
+  mekeeli-api:
+    build:
+      context: ./mekeeli-api
+      dockerfile: Dockerfile
+    volumes:
+      - ./mekeeli-api:/app
+      - ./mekeeli-api/sql.db:/app/sql.db
+      - mekeeli-api-venv:/app/.venv
+    env_file: !reset
+      - ./mekeeli-api/.env.local
     environment:
       - ENVIRONMENT=development
-    command: uvicorn core.main:app --host 0.0.0.0 --port 8000 --reload
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - PYTHONPATH=/app
+
+    entrypoint: []
+    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
+    depends_on: !reset []
 
-  ui:
+
+
+  mekeeli-ui:
     build:
       context: ./mekeeli-ui
-      dockerfile: ./mekeeli-ui/Dockerfile
+      dockerfile: Dockerfile
     volumes:
-      - ./mekeeli-ui:/app
-      - /app/node_modules
+      - ./mekeeli-ui/src:/app/src
+      - ./mekeeli-ui/public:/app/public
+      - ./mekeeli-ui/index.html:/app/index.html
+      - ./mekeeli-ui/vite.config.ts:/app/vite.config.ts
+      - ./mekeeli-ui/tsconfig.json:/app/tsconfig.json
+      - ./mekeeli-ui/tailwind.config.js:/app/tailwind.config.js
+      - ./mekeeli-ui/postcss.config.js:/app/postcss.config.js
+      - ./mekeeli-ui/package.json:/app/package.json
     environment:
-      - API_URL=http://api:8000
-    command: npm run dev
+      - API_URL=http://mekeeli-api:8000
     ports:
       - "3000:3000"
+
+volumes:
+  mekeeli-api-venv:
+  postgres-data-dev:

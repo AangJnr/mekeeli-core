@@ -9,5 +9,5 @@ if [ "$ENV" = "production" ]; then
   docker-compose --env-file .env exec api alembic upgrade head
 else
   echo "🛠️ Running migrations in development (SQLite)..."
-  DATABASE_URL=sqlite:///./dev.db alembic upgrade head
+  DATABASE_URL=sqlite:///./sql.db alembic upgrade head
 fi
