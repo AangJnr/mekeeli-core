@@ -101,8 +101,23 @@ wait_for_service_healthy() {
 
 wait_for_ollama_init_completion() {
   local timeout_seconds="${OLLAMA_INIT_TIMEOUT_SECONDS:-3600}"
+  local verbose_logs="${OLLAMA_INIT_VERBOSE_LOGS:-true}"
   local delay=5
   local elapsed=0
+  local log_pid=""
+
+  stop_ollama_log_stream() {
+    if [[ -n "$log_pid" ]] && kill -0 "$log_pid" >/dev/null 2>&1; then
+      kill "$log_pid" >/dev/null 2>&1 || true
+      wait "$log_pid" 2>/dev/null || true
+    fi
+  }
+
+  if [[ "$verbose_logs" == "true" ]]; then
+    log "Streaming ollama-init logs..."
+    "${COMPOSE_CMD[@]}" logs -f --tail=20 ollama-init &
+    log_pid=$!
+  fi
 
   while [[ "$elapsed" -lt "$timeout_seconds" ]]; do
     local container_id
@@ -115,9 +130,11 @@ wait_for_ollama_init_completion() {
         local exit_code
         exit_code="$("${DOCKER_CMD[@]}" inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || true)"
         if [[ "$exit_code" == "0" ]]; then
+          stop_ollama_log_stream
           log "ollama-init completed successfully."
           return 0
         fi
+        stop_ollama_log_stream
         log "ollama-init failed (exit code: $exit_code)."
         "${COMPOSE_CMD[@]}" logs --tail=200 ollama-init || true
         return 1
@@ -131,6 +148,7 @@ wait_for_ollama_init_completion() {
     elapsed=$((elapsed + delay))
   done
 
+  stop_ollama_log_stream
   log "Timed out waiting for ollama-init after ${timeout_seconds}s."
   "${COMPOSE_CMD[@]}" logs --tail=200 ollama-init || true
   return 1

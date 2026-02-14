@@ -69,6 +69,13 @@ To bound long pulls on slower links, you can set:
 export OLLAMA_INIT_TIMEOUT_SECONDS=7200
 ```
 
+To control ollama-init download log streaming during setup:
+
+```bash
+# default: true
+export OLLAMA_INIT_VERBOSE_LOGS=true
+```
+
 ## What runs
 
 Current Compose services:
