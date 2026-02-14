@@ -115,6 +115,7 @@ docker compose logs -f mekeeli-backup
 The setup script ensures these files exist:
 - `.env.local` (from `.env.template` if missing)
 - `.env` (from `.env.local` if missing)
+- `mekeeli-api/.env` (from `mekeeli-api/.env.template` if missing)
 - `mekeeli-api/.env.local` (from `mekeeli-api/.env.template` if missing)
 
 If you need custom values, edit those files before running `./setup.sh`.

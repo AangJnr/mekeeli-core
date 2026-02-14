@@ -62,10 +62,12 @@ services:
       - ./volumes/mekeeli_data:/app/data
       - ./volumes/uploads:/app/uploads
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # Use Python stdlib to avoid relying on curl in the runtime image.
+      test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').getcode() == 200 else 1)"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
 
   mekeeli-ui:
     image: mekeeli/mekeeli-ui:${MEKEELI_UI_VERSION:-latest}
@@ -75,10 +77,12 @@ services:
     environment:
       - API_URL=http://mekeeli-api:8000
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      # Node runtime is guaranteed in this image, unlike curl.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 20s
 
   mekeeli-backup:
     image: postgres:15

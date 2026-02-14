@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     ports:
       - "5432:5432"
-    env_file: !reset
+    env_file:
       - .env.local
     environment:
       - POSTGRES_USER=mekeeli
@@ -32,11 +32,15 @@ services:
     volumes:
       - ./mekeeli-api:/app
       - mekeeli-api-venv:/app/.venv
-    env_file: !reset
+    env_file:
+      - ./mekeeli-api/.env
+      - ./.env.local
       - ./mekeeli-api/.env.local
     environment:
       - ENVIRONMENT=development
       - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DATABASE_URL=postgresql+psycopg2://mekeeli:mekeeli_pass@db:5432/mekeeli_db
       - PYTHONPATH=/app
     entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
     command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -69,7 +73,7 @@ services:
       - "127.0.0.1:3000:3000"
 
   mekeeli-backup:
-    env_file: !reset
+    env_file:
       - .env.local
     environment:
       - UPLOADS_DIR=/app-data/uploads

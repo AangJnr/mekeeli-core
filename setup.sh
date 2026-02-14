@@ -397,6 +397,7 @@ ensure_docker_compose
 
 ensure_env_file ".env.local" ".env.template"
 ensure_env_file ".env" ".env.local"
+ensure_env_file "mekeeli-api/.env" "mekeeli-api/.env.template"
 ensure_env_file "mekeeli-api/.env.local" "mekeeli-api/.env.template"
 
 log "Starting core services (db, ollama)..."
