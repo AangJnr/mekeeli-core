@@ -8,14 +8,18 @@ DOCKER_CMD=(docker)
 OS_ID=""
 OS_LIKE=""
 ASSUME_YES=false
+SYNC_REPOS=true
+PULL_REPOS=false
 
 usage() {
   cat <<'EOF'
 Usage: ./setup.sh [options]
 
 Options:
-  -y, --yes    Non-interactive mode. Auto-approve install actions.
-  -h, --help   Show this help text.
+  -y, --yes         Non-interactive mode. Auto-approve install actions.
+      --no-sync     Skip syncing git submodules.
+      --pull-repos  Pull latest remote commits for submodules (tracks branch).
+  -h, --help        Show this help text.
 EOF
 }
 
@@ -33,6 +37,14 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
+    --no-sync)
+      SYNC_REPOS=false
+      shift
+      ;;
+    --pull-repos)
+      PULL_REPOS=true
+      shift
+      ;;
     *)
       log "Unknown option: $1"
       usage
@@ -43,6 +55,31 @@ done
 
 have_cmd() {
   command -v "$1" >/dev/null 2>&1
+}
+
+ensure_repo_modules() {
+  if [[ "$SYNC_REPOS" != "true" ]]; then
+    return 0
+  fi
+
+  if [[ ! -f ".gitmodules" ]]; then
+    return 0
+  fi
+
+  if ! have_cmd git; then
+    log "git is required to sync mekeeli-api/mekeeli-ui but is not installed."
+    exit 1
+  fi
+
+  log "Syncing repository modules (mekeeli-api, mekeeli-ui)..."
+  git submodule sync --recursive
+
+  if [[ "$PULL_REPOS" == "true" ]]; then
+    log "Pulling latest remote commits for submodules..."
+    git submodule update --init --recursive --remote --merge
+  else
+    git submodule update --init --recursive
+  fi
 }
 
 load_os_release() {
@@ -274,6 +311,7 @@ wait_for_http() {
 }
 
 load_os_release
+ensure_repo_modules
 ensure_docker_cli
 start_docker_if_needed
 ensure_docker_compose

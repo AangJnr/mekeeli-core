@@ -1,6 +1,8 @@
 [submodule "mekeeli-ui"]
 	path = mekeeli-ui
 	url = https://github.com/AangJnr/mekeeli-ui.git
+	branch = main
 [submodule "mekeeli-api"]
 	path = mekeeli-api
 	url = https://github.com/AangJnr/mekeeli-api.git
+	branch = main

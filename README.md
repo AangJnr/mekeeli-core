@@ -11,6 +11,13 @@ Default local entrypoint for users is:
 
 ## Quick start (recommended)
 
+If cloning fresh, include submodules:
+
+```bash
+git clone --recurse-submodules <root-repo-url>
+cd mekeeli
+```
+
 From repo root:
 
 ```bash
@@ -24,6 +31,7 @@ For non-interactive environments (CI/provisioning):
 ```
 
 `setup.sh` will:
+- sync git submodules so `mekeeli-api` and `mekeeli-ui` are present under root
 - check/install required tools (`docker`, `docker compose`) on macOS and Debian/Ubuntu
 - start Docker if needed
 - create missing env files from templates
@@ -33,6 +41,16 @@ For non-interactive environments (CI/provisioning):
   - `qwen2.5:7b-instruct`
   - `qwen2.5vl:7b`
   - `bge-m3`
+
+Optional repo-sync flags:
+
+```bash
+# pull latest commits from mekeeli-api/mekeeli-ui main branches
+./setup.sh --pull-repos
+
+# skip submodule sync entirely
+./setup.sh --no-sync
+```
 
 ## What runs
 
