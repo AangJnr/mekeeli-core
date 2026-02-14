@@ -61,6 +61,9 @@ services:
   mekeeli-ui:
     image: mekeeli/mekeeli-ui:${MEKEELI_UI_VERSION:-latest}
     restart: unless-stopped
+    depends_on:
+      mekeeli-api:
+        condition: service_healthy
     ports:
       - "127.0.0.1:3000:3000"
     environment:

@@ -20,10 +20,6 @@ services:
     volumes:
       - ./volumes/ollama:/root/.ollama
 
-  ollama-init:
-    # Reuse the base definition; nothing special needed here
-    volumes:
-      - ./volumes/ollama:/root/.ollama
 
   mekeeli-api:
     build:
@@ -53,8 +49,7 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
+
 
   mekeeli-ui:
     build:
