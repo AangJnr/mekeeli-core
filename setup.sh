@@ -99,82 +99,6 @@ wait_for_service_healthy() {
   return 1
 }
 
-wait_for_ollama_models() {
-  local timeout_seconds="${OLLAMA_BOOTSTRAP_TIMEOUT_SECONDS:-3600}"
-  local verbose_logs="${OLLAMA_BOOTSTRAP_VERBOSE_LOGS:-true}"
-  local models_raw="${OLLAMA_REQUIRED_MODELS:-qwen3-vl:4b,embeddinggemma}"
-  local delay=5
-  local elapsed=0
-  local log_pid=""
-
-  models_raw="${models_raw//,/ }"
-  log "Required Ollama models: ${models_raw}"
-
-  stop_ollama_bootstrap_log_stream() {
-    if [[ -n "$log_pid" ]] && kill -0 "$log_pid" >/dev/null 2>&1; then
-      kill "$log_pid" >/dev/null 2>&1 || true
-      wait "$log_pid" 2>/dev/null || true
-    fi
-  }
-
-  if [[ "$verbose_logs" == "true" ]]; then
-    log "Streaming verbose ollama logs..."
-    "${COMPOSE_CMD[@]}" logs -f --tail=200 ollama &
-    log_pid=$!
-  fi
-
-  while [[ "$elapsed" -lt "$timeout_seconds" ]]; do
-    local list_output=""
-    if list_output="$("${COMPOSE_CMD[@]}" exec -T ollama ollama list 2>/dev/null)"; then
-      local available_models
-      available_models="$(printf '%s\n' "$list_output" | awk 'NR>1 {print $1}')"
-      local missing_models=()
-      local model
-      for model in $models_raw; do
-        local found=false
-        local available_model
-        for available_model in $available_models; do
-          if [[ "$model" == *":"* ]]; then
-            if [[ "$available_model" == "$model" ]]; then
-              found=true
-              break
-            fi
-          else
-            if [[ "$available_model" == "$model" || "$available_model" == "$model:"* ]]; then
-              found=true
-              break
-            fi
-          fi
-        done
-        if [[ "$found" == "false" ]]; then
-          missing_models+=("$model")
-        fi
-      done
-
-      if [[ "${#missing_models[@]}" -eq 0 ]]; then
-        stop_ollama_bootstrap_log_stream
-        log "Ollama model bootstrap completed (${models_raw})."
-        return 0
-      fi
-
-      if (( elapsed % 30 == 0 )); then
-        log "Still missing models: ${missing_models[*]}"
-      fi
-    fi
-
-    if (( elapsed % 30 == 0 )); then
-      log "Waiting for Ollama models (${models_raw})... (${elapsed}s elapsed)"
-    fi
-    sleep "$delay"
-    elapsed=$((elapsed + delay))
-  done
-
-  stop_ollama_bootstrap_log_stream
-  log "Timed out waiting for Ollama models after ${timeout_seconds}s."
-  "${COMPOSE_CMD[@]}" logs --tail=200 ollama || true
-  return 1
-}
-
 ensure_repo_modules() {
   if [[ "$SYNC_REPOS" != "true" ]]; then
     return 0
@@ -468,14 +392,6 @@ log "Starting core services (db, ollama)..."
 
 wait_for_service_healthy "db" 120 2
 wait_for_service_healthy "ollama" 180 2
-
-if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
-  log "Skipped waiting for Ollama model bootstrap."
-  log "Model pulls continue in the ollama service logs."
-else
-  log "Waiting for Ollama model bootstrap to complete before starting app services..."
-  wait_for_ollama_models
-fi
 
 log "Starting application services (mekeeli-api, mekeeli-ui, mekeeli-backup)..."
 "${COMPOSE_CMD[@]}" up -d --build mekeeli-api mekeeli-ui mekeeli-backup
