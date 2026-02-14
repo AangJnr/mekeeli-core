@@ -108,6 +108,7 @@ wait_for_ollama_models() {
   local log_pid=""
 
   models_raw="${models_raw//,/ }"
+  log "Required Ollama models: ${models_raw}"
 
   stop_ollama_bootstrap_log_stream() {
     if [[ -n "$log_pid" ]] && kill -0 "$log_pid" >/dev/null 2>&1; then
@@ -125,10 +126,27 @@ wait_for_ollama_models() {
   while [[ "$elapsed" -lt "$timeout_seconds" ]]; do
     local list_output=""
     if list_output="$("${COMPOSE_CMD[@]}" exec -T ollama ollama list 2>/dev/null)"; then
+      local available_models
+      available_models="$(printf '%s\n' "$list_output" | awk 'NR>1 {print $1}')"
       local missing_models=()
       local model
       for model in $models_raw; do
-        if ! printf '%s\n' "$list_output" | grep -Fq "$model"; then
+        local found=false
+        local available_model
+        for available_model in $available_models; do
+          if [[ "$model" == *":"* ]]; then
+            if [[ "$available_model" == "$model" ]]; then
+              found=true
+              break
+            fi
+          else
+            if [[ "$available_model" == "$model" || "$available_model" == "$model:"* ]]; then
+              found=true
+              break
+            fi
+          fi
+        done
+        if [[ "$found" == "false" ]]; then
           missing_models+=("$model")
         fi
       done
@@ -137,6 +155,10 @@ wait_for_ollama_models() {
         stop_ollama_bootstrap_log_stream
         log "Ollama model bootstrap completed (${models_raw})."
         return 0
+      fi
+
+      if (( elapsed % 30 == 0 )); then
+        log "Still missing models: ${missing_models[*]}"
       fi
     fi
 
