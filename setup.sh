@@ -418,6 +418,10 @@ ensure_env_file ".env" ".env.local"
 ensure_env_file "mekeeli-api/.env" "mekeeli-api/.env.template"
 ensure_env_file "mekeeli-api/.env.local" "mekeeli-api/.env.template"
 
+# Pre-create writable upload/data paths for bind-mounted dev layout.
+mkdir -p "mekeeli-api/data/uploads/files" "mekeeli-api/data/uploads/attachments"
+chmod -R 0777 "mekeeli-api/data/uploads" || true
+
 log "Starting core services (db, ollama)..."
 if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
   "${COMPOSE_CMD[@]}" up -d --build db ollama

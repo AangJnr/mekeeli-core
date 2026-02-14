@@ -30,8 +30,12 @@ services:
       context: ./mekeeli-api
       dockerfile: Dockerfile
     volumes:
+      # Keep source mount for live reload, then remount writable data paths
+      # so appuser can create/upload files under /app/data and /app/uploads.
       - ./mekeeli-api:/app
       - mekeeli-api-venv:/app/.venv
+      - ./mekeeli-api/data:/app/data
+      - ./mekeeli-api/data/uploads:/app/uploads
     env_file:
       - ./mekeeli-api/.env
       - ./.env.local
