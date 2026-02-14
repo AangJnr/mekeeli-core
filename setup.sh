@@ -20,7 +20,7 @@ Options:
   -y, --yes         Non-interactive mode. Auto-approve install actions.
       --no-sync     Skip syncing git submodules.
       --pull-repos  Pull latest remote commits for submodules (tracks branch).
-      --skip-model-bootstrap  Start stack without running `ollama-init`.
+      --skip-model-bootstrap  Skip waiting for Ollama model bootstrap completion.
   -h, --help        Show this help text.
 EOF
 }
@@ -99,14 +99,17 @@ wait_for_service_healthy() {
   return 1
 }
 
-wait_for_ollama_init_completion() {
-  local timeout_seconds="${OLLAMA_INIT_TIMEOUT_SECONDS:-3600}"
-  local verbose_logs="${OLLAMA_INIT_VERBOSE_LOGS:-true}"
+wait_for_ollama_models() {
+  local timeout_seconds="${OLLAMA_BOOTSTRAP_TIMEOUT_SECONDS:-3600}"
+  local verbose_logs="${OLLAMA_BOOTSTRAP_VERBOSE_LOGS:-true}"
+  local models_raw="${OLLAMA_REQUIRED_MODELS:-qwen3-vl:4b,embeddinggemma}"
   local delay=5
   local elapsed=0
   local log_pid=""
 
-  stop_ollama_log_stream() {
+  models_raw="${models_raw//,/ }"
+
+  stop_ollama_bootstrap_log_stream() {
     if [[ -n "$log_pid" ]] && kill -0 "$log_pid" >/dev/null 2>&1; then
       kill "$log_pid" >/dev/null 2>&1 || true
       wait "$log_pid" 2>/dev/null || true
@@ -114,43 +117,39 @@ wait_for_ollama_init_completion() {
   }
 
   if [[ "$verbose_logs" == "true" ]]; then
-    log "Streaming verbose ollama-init logs..."
-    "${COMPOSE_CMD[@]}" logs -f --tail=200 ollama-init &
+    log "Streaming verbose ollama logs..."
+    "${COMPOSE_CMD[@]}" logs -f --tail=200 ollama &
     log_pid=$!
   fi
 
   while [[ "$elapsed" -lt "$timeout_seconds" ]]; do
-    local container_id
-    container_id="$("${COMPOSE_CMD[@]}" ps -q ollama-init 2>/dev/null || true)"
-    if [[ -n "$container_id" ]]; then
-      local state_status
-      state_status="$("${DOCKER_CMD[@]}" inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
-
-      if [[ "$state_status" == "exited" ]]; then
-        local exit_code
-        exit_code="$("${DOCKER_CMD[@]}" inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || true)"
-        if [[ "$exit_code" == "0" ]]; then
-          stop_ollama_log_stream
-          log "ollama-init completed successfully."
-          return 0
+    local list_output=""
+    if list_output="$("${COMPOSE_CMD[@]}" exec -T ollama ollama list 2>/dev/null)"; then
+      local missing_models=()
+      local model
+      for model in $models_raw; do
+        if ! printf '%s\n' "$list_output" | grep -Fq "$model"; then
+          missing_models+=("$model")
         fi
-        stop_ollama_log_stream
-        log "ollama-init failed (exit code: $exit_code)."
-        "${COMPOSE_CMD[@]}" logs --tail=200 ollama-init || true
-        return 1
+      done
+
+      if [[ "${#missing_models[@]}" -eq 0 ]]; then
+        stop_ollama_bootstrap_log_stream
+        log "Ollama model bootstrap completed (${models_raw})."
+        return 0
       fi
     fi
 
     if (( elapsed % 30 == 0 )); then
-      log "Waiting for ollama-init to finish model downloads... (${elapsed}s elapsed)"
+      log "Waiting for Ollama models (${models_raw})... (${elapsed}s elapsed)"
     fi
     sleep "$delay"
     elapsed=$((elapsed + delay))
   done
 
-  stop_ollama_log_stream
-  log "Timed out waiting for ollama-init after ${timeout_seconds}s."
-  "${COMPOSE_CMD[@]}" logs --tail=200 ollama-init || true
+  stop_ollama_bootstrap_log_stream
+  log "Timed out waiting for Ollama models after ${timeout_seconds}s."
+  "${COMPOSE_CMD[@]}" logs --tail=200 ollama || true
   return 1
 }
 
@@ -443,29 +442,21 @@ ensure_writable_dir "volumes/uploads/files"
 ensure_writable_dir "volumes/uploads/attachments"
 
 log "Starting core services (db, ollama)..."
-if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
-  "${COMPOSE_CMD[@]}" up -d --build db ollama
-else
-  "${COMPOSE_CMD[@]}" up -d --build db ollama ollama-init
-fi
+"${COMPOSE_CMD[@]}" up -d --build db ollama
 
 wait_for_service_healthy "db" 120 2
 wait_for_service_healthy "ollama" 180 2
 
 if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
-  log "Skipped model bootstrap service (ollama-init)."
-  log "Run manually later: ${COMPOSE_CMD[*]} up -d ollama-init"
+  log "Skipped waiting for Ollama model bootstrap."
+  log "Model pulls continue in the ollama service logs."
 else
-  log "Waiting for model bootstrap (ollama-init) to complete before starting app services..."
-  wait_for_ollama_init_completion
+  log "Waiting for Ollama model bootstrap to complete before starting app services..."
+  wait_for_ollama_models
 fi
 
 log "Starting application services (mekeeli-api, mekeeli-ui, mekeeli-backup)..."
-if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
-  "${COMPOSE_CMD[@]}" up -d --build --no-deps mekeeli-api mekeeli-ui mekeeli-backup
-else
-  "${COMPOSE_CMD[@]}" up -d --build mekeeli-api mekeeli-ui mekeeli-backup
-fi
+"${COMPOSE_CMD[@]}" up -d --build mekeeli-api mekeeli-ui mekeeli-backup
 
 if ! have_cmd curl; then
   log "curl not found; skipping HTTP readiness checks."

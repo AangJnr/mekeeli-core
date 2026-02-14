@@ -4,7 +4,7 @@ Local-first AI workspace with:
 - `mekeeli-ui` (React/Vite frontend, user entrypoint)
 - `mekeeli-api` (FastAPI backend + API)
 - `db` (Postgres)
-- `ollama` + `ollama-init` (local model runtime + model bootstrap)
+- `ollama` (local model runtime + model bootstrap)
 
 Default local entrypoint for users is:
 - `http://localhost:3000`
@@ -54,40 +54,42 @@ Optional repo-sync flags:
 Model bootstrap flag:
 
 ```bash
-# skip one-time model downloads during setup (run later when convenient)
+# skip waiting for model downloads during setup (downloads continue in ollama service)
 ./setup.sh --skip-model-bootstrap
 ```
 
 By default, setup waits for:
 - `db` healthy
 - `ollama` healthy
-- `ollama-init` completed successfully (model pulls)
+- required Ollama models to appear in `ollama list`
 
 To bound long pulls on slower links, you can set:
 
 ```bash
-export OLLAMA_INIT_TIMEOUT_SECONDS=7200
+export OLLAMA_BOOTSTRAP_TIMEOUT_SECONDS=7200
 ```
 
-To control ollama-init download log streaming during setup:
+To control Ollama bootstrap log streaming during setup:
 
 ```bash
 # default: true
-export OLLAMA_INIT_VERBOSE_LOGS=true
+export OLLAMA_BOOTSTRAP_VERBOSE_LOGS=true
+
+# optional override for model list checked by setup
+export OLLAMA_REQUIRED_MODELS="qwen3-vl:4b,embeddinggemma"
 ```
 
 ## What runs
 
 Current Compose services:
 - `db` (Postgres 15)
-- `ollama` (local model server)
-- `ollama-init` (one-shot model pull)
+- `ollama` (local model server + model pull bootstrap)
 - `mekeeli-api` (FastAPI on `http://localhost:8000`)
 - `mekeeli-ui` (frontend on `http://localhost:3000`)
 - `mekeeli-backup` (scheduled automated backups)
 
 Note:
-- `setup.sh` waits for `ollama-init` completion before starting API/UI unless `--skip-model-bootstrap` is used.
+- `setup.sh` waits for Ollama model bootstrap before starting API/UI unless `--skip-model-bootstrap` is used.
 
 Useful URLs:
 - UI: `http://localhost:3000`
@@ -100,6 +102,9 @@ Useful URLs:
 From repo root:
 
 ```bash
+# helper wrapper for common compose operations
+./scripts/docker-ops.sh help
+
 # start/rebuild (uses docker-compose.yml + docker-compose.override.yml automatically)
 docker compose up -d --build
 
@@ -115,6 +120,18 @@ docker compose logs -f mekeeli-api
 docker compose logs -f mekeeli-ui
 docker compose logs -f ollama
 docker compose logs -f mekeeli-backup
+```
+
+Equivalent helper examples:
+
+```bash
+./scripts/docker-ops.sh up
+./scripts/docker-ops.sh ps
+./scripts/docker-ops.sh logs mekeeli-api
+./scripts/docker-ops.sh stop mekeeli-ui
+./scripts/docker-ops.sh restart mekeeli-api
+./scripts/docker-ops.sh down
+./scripts/docker-ops.sh down-v
 ```
 
 ## Environment files
@@ -218,7 +235,7 @@ docker compose exec mekeeli-api uv run python worker.py
 - Port conflicts:
   - Ensure `3000`, `8000`, `5432`, `11434` are free.
 - Ollama models not available:
-  - Check `docker compose logs -f ollama-init`.
+  - Check `docker compose logs -f ollama`.
 - API imports fail for missing packages:
   - Rebuild API container: `docker compose up -d --build mekeeli-api`.
 
