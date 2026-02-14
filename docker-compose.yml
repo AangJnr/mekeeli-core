@@ -35,7 +35,10 @@ services:
         condition: service_healthy
     volumes:
       - ./volumes/ollama:/root/.ollama
-    entrypoint: ["/bin/sh", "-lc"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434   # talk to the running service
+      - OLLAMA_NO_ANSI=1
+    entrypoint: ["/bin/sh", "-c"]
     command: >
       ollama pull qwen3-vl:4b &&
       ollama pull embeddinggemma
