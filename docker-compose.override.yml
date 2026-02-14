@@ -30,12 +30,10 @@ services:
       context: ./mekeeli-api
       dockerfile: Dockerfile
     volumes:
-      # Keep source mount for live reload, then remount writable data paths
-      # so appuser can create/upload files under /app/data and /app/uploads.
-      - ./mekeeli-api:/app
+      # Use root shared volumes for runtime state and uploads.
       - mekeeli-api-venv:/app/.venv
-      - ./mekeeli-api/data:/app/data
-      - ./mekeeli-api/data/uploads:/app/uploads
+      - ./volumes/mekeeli_data:/app/data
+      - ./volumes/uploads:/app/data/uploads
     env_file:
       - ./mekeeli-api/.env
       - ./.env.local
@@ -47,7 +45,7 @@ services:
       - DATABASE_URL=postgresql+psycopg2://mekeeli:mekeeli_pass@db:5432/mekeeli_db
       - PYTHONPATH=/app
     entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
-    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     depends_on:
@@ -80,12 +78,13 @@ services:
     env_file:
       - .env.local
     environment:
-      - UPLOADS_DIR=/app-data/uploads
+      - UPLOADS_DIR=/uploads-data
     volumes:
       - ./scripts/backup_once.sh:/scripts/backup_once.sh:ro
       - ./scripts/backup_loop.sh:/scripts/backup_loop.sh:ro
       - ./volumes/backups:/backups
-      - ./mekeeli-api/data:/app-data:ro
+      - ./volumes/mekeeli_data:/app-data:ro
+      - ./volumes/uploads:/uploads-data:ro
       - ./volumes/ollama:/ollama-data:ro
 
 volumes:

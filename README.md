@@ -134,7 +134,7 @@ Backups are now automatic via the `mekeeli-backup` service.
 What is backed up on each run:
 - Postgres logical dump (`pg_dump`, gzipped)
 - API app data volume (`/app/data`)
-- uploads volume (`/app/uploads`, if populated)
+- uploads volume (`/app/data/uploads`, if populated)
 - Ollama model store (`/root/.ollama`) when enabled
 
 Backup output location:

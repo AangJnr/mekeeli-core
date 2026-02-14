@@ -60,7 +60,7 @@ services:
       - "8000:8000"
     volumes:
       - ./volumes/mekeeli_data:/app/data
-      - ./volumes/uploads:/app/uploads
+      - ./volumes/uploads:/app/data/uploads
     healthcheck:
       # Use Python stdlib to avoid relying on curl in the runtime image.
       test: ["CMD", "python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').getcode() == 200 else 1)"]

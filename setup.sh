@@ -231,6 +231,25 @@ as_root() {
   fi
 }
 
+ensure_writable_dir() {
+  local target="$1"
+  local mode="${2:-0777}"
+
+  if mkdir -p "$target" >/dev/null 2>&1; then
+    chmod -R "$mode" "$target" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  log "Permission issue creating $target. Attempting elevated fix..."
+  as_root mkdir -p "$target"
+  as_root chmod -R "$mode" "$target"
+
+  local owner="${SUDO_USER:-${USER:-}}"
+  if [[ -n "$owner" ]]; then
+    as_root chown -R "$owner":"$owner" "$target" || true
+  fi
+}
+
 install_with_brew() {
   local package="$1"
   if ! have_cmd brew; then
@@ -418,9 +437,10 @@ ensure_env_file ".env" ".env.local"
 ensure_env_file "mekeeli-api/.env" "mekeeli-api/.env.template"
 ensure_env_file "mekeeli-api/.env.local" "mekeeli-api/.env.template"
 
-# Pre-create writable upload/data paths for bind-mounted dev layout.
-mkdir -p "mekeeli-api/data/uploads/files" "mekeeli-api/data/uploads/attachments"
-chmod -R 0777 "mekeeli-api/data/uploads" || true
+# Pre-create writable shared data paths under root volumes.
+ensure_writable_dir "volumes/mekeeli_data"
+ensure_writable_dir "volumes/uploads/files"
+ensure_writable_dir "volumes/uploads/attachments"
 
 log "Starting core services (db, ollama)..."
 if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
