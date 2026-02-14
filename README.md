@@ -38,9 +38,8 @@ For non-interactive environments (CI/provisioning):
 - build and start the stack with Docker Compose
 - use containerized `uv` inside the API image (host `uv` not required)
 - pull default Ollama models:
-  - `qwen2.5:7b-instruct`
-  - `qwen2.5vl:7b`
-  - `bge-m3`
+  - `qwen3-vl:4b`
+  - `embeddinggemma`
 
 Optional repo-sync flags:
 
@@ -52,6 +51,24 @@ Optional repo-sync flags:
 ./setup.sh --no-sync
 ```
 
+Model bootstrap flag:
+
+```bash
+# skip one-time model downloads during setup (run later when convenient)
+./setup.sh --skip-model-bootstrap
+```
+
+By default, setup waits for:
+- `db` healthy
+- `ollama` healthy
+- `ollama-init` completed successfully (model pulls)
+
+To bound long pulls on slower links, you can set:
+
+```bash
+export OLLAMA_INIT_TIMEOUT_SECONDS=7200
+```
+
 ## What runs
 
 Current Compose services:
@@ -61,6 +78,9 @@ Current Compose services:
 - `mekeeli-api` (FastAPI on `http://localhost:8000`)
 - `mekeeli-ui` (frontend on `http://localhost:3000`)
 - `mekeeli-backup` (scheduled automated backups)
+
+Note:
+- `setup.sh` waits for `ollama-init` completion before starting API/UI unless `--skip-model-bootstrap` is used.
 
 Useful URLs:
 - UI: `http://localhost:3000`

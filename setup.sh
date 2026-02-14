@@ -10,6 +10,7 @@ OS_LIKE=""
 ASSUME_YES=false
 SYNC_REPOS=true
 PULL_REPOS=false
+SKIP_MODEL_BOOTSTRAP=false
 
 usage() {
   cat <<'EOF'
@@ -19,6 +20,7 @@ Options:
   -y, --yes         Non-interactive mode. Auto-approve install actions.
       --no-sync     Skip syncing git submodules.
       --pull-repos  Pull latest remote commits for submodules (tracks branch).
+      --skip-model-bootstrap  Start stack without running `ollama-init`.
   -h, --help        Show this help text.
 EOF
 }
@@ -45,6 +47,10 @@ while [[ $# -gt 0 ]]; do
       PULL_REPOS=true
       shift
       ;;
+    --skip-model-bootstrap)
+      SKIP_MODEL_BOOTSTRAP=true
+      shift
+      ;;
     *)
       log "Unknown option: $1"
       usage
@@ -55,6 +61,79 @@ done
 
 have_cmd() {
   command -v "$1" >/dev/null 2>&1
+}
+
+wait_for_service_healthy() {
+  local service="$1"
+  local attempts="$2"
+  local delay="$3"
+
+  for _ in $(seq 1 "$attempts"); do
+    local container_id
+    container_id="$("${COMPOSE_CMD[@]}" ps -q "$service" 2>/dev/null || true)"
+    if [[ -z "$container_id" ]]; then
+      sleep "$delay"
+      continue
+    fi
+
+    local health_status
+    health_status="$("${DOCKER_CMD[@]}" inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container_id" 2>/dev/null || true)"
+    if [[ "$health_status" == "healthy" ]]; then
+      log "$service is healthy."
+      return 0
+    fi
+
+    local state_status
+    state_status="$("${DOCKER_CMD[@]}" inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+    if [[ "$state_status" == "exited" || "$state_status" == "dead" ]]; then
+      log "$service stopped unexpectedly (status: $state_status)."
+      "${COMPOSE_CMD[@]}" logs --tail=100 "$service" || true
+      return 1
+    fi
+
+    sleep "$delay"
+  done
+
+  log "$service did not become healthy in time."
+  "${COMPOSE_CMD[@]}" logs --tail=100 "$service" || true
+  return 1
+}
+
+wait_for_ollama_init_completion() {
+  local timeout_seconds="${OLLAMA_INIT_TIMEOUT_SECONDS:-3600}"
+  local delay=5
+  local elapsed=0
+
+  while [[ "$elapsed" -lt "$timeout_seconds" ]]; do
+    local container_id
+    container_id="$("${COMPOSE_CMD[@]}" ps -q ollama-init 2>/dev/null || true)"
+    if [[ -n "$container_id" ]]; then
+      local state_status
+      state_status="$("${DOCKER_CMD[@]}" inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null || true)"
+
+      if [[ "$state_status" == "exited" ]]; then
+        local exit_code
+        exit_code="$("${DOCKER_CMD[@]}" inspect -f '{{.State.ExitCode}}' "$container_id" 2>/dev/null || true)"
+        if [[ "$exit_code" == "0" ]]; then
+          log "ollama-init completed successfully."
+          return 0
+        fi
+        log "ollama-init failed (exit code: $exit_code)."
+        "${COMPOSE_CMD[@]}" logs --tail=200 ollama-init || true
+        return 1
+      fi
+    fi
+
+    if (( elapsed % 30 == 0 )); then
+      log "Waiting for ollama-init to finish model downloads... (${elapsed}s elapsed)"
+    fi
+    sleep "$delay"
+    elapsed=$((elapsed + delay))
+  done
+
+  log "Timed out waiting for ollama-init after ${timeout_seconds}s."
+  "${COMPOSE_CMD[@]}" logs --tail=200 ollama-init || true
+  return 1
 }
 
 ensure_repo_modules() {
@@ -320,8 +399,30 @@ ensure_env_file ".env.local" ".env.template"
 ensure_env_file ".env" ".env.local"
 ensure_env_file "mekeeli-api/.env.local" "mekeeli-api/.env.template"
 
-log "Building and starting stack..."
-"${COMPOSE_CMD[@]}" up -d --build
+log "Starting core services (db, ollama)..."
+if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
+  "${COMPOSE_CMD[@]}" up -d --build db ollama
+else
+  "${COMPOSE_CMD[@]}" up -d --build db ollama ollama-init
+fi
+
+wait_for_service_healthy "db" 120 2
+wait_for_service_healthy "ollama" 180 2
+
+if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
+  log "Skipped model bootstrap service (ollama-init)."
+  log "Run manually later: ${COMPOSE_CMD[*]} up -d ollama-init"
+else
+  log "Waiting for model bootstrap (ollama-init) to complete before starting app services..."
+  wait_for_ollama_init_completion
+fi
+
+log "Starting application services (mekeeli-api, mekeeli-ui, mekeeli-backup)..."
+if [[ "$SKIP_MODEL_BOOTSTRAP" == "true" ]]; then
+  "${COMPOSE_CMD[@]}" up -d --build --no-deps mekeeli-api mekeeli-ui mekeeli-backup
+else
+  "${COMPOSE_CMD[@]}" up -d --build mekeeli-api mekeeli-ui mekeeli-backup
+fi
 
 if ! have_cmd curl; then
   log "curl not found; skipping HTTP readiness checks."
