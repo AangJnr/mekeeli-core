@@ -33,6 +33,10 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
+    environment:
+      # Ensure CLI targets the running ollama service and avoids interactive TUI mode.
+      - OLLAMA_HOST=http://ollama:11434
+      - CI=true
     volumes:
       - ./volumes/ollama:/root/.ollama
     entrypoint: ["/bin/sh", "-lc"]
