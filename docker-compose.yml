@@ -8,35 +8,54 @@ services:
     volumes:
       - ./volumes/db:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mekeeli} -d ${POSTGRES_DB:-mekeeli_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   restart: always
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ./volumes/ollama:/root/.ollama
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
-  #   entrypoint: ["/bin/sh", "-c", "ollama pull gemma3:4b && ollama serve"]
+  ollama:
+    image: ollama/ollama:latest
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./volumes/ollama:/root/.ollama
+    healthcheck:
+      # Avoid curl dependency. This succeeds once the Ollama server is actually responding.
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ollama-init:
+    image: ollama/ollama:latest
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./volumes/ollama:/root/.ollama
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      ollama pull qwen3-vl:4b &&
+      ollama pull embeddinggemma
 
   mekeeli-api:
     image: mekeeli/mekeeli-api:${MEKEELI_API_VERSION:-latest}
-    restart: always
+    restart: unless-stopped
     depends_on:
-      - db
-      - ollama
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     env_file: mekeeli-api/.env
     environment:
       - ENVIRONMENT=production
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - ENABLE_SIGNUP=true
+      - DEFAULT_USER_ROLE=pending
     ports:
       - "8000:8000"
     volumes:
@@ -50,11 +69,9 @@ services:
 
   mekeeli-ui:
     image: mekeeli/mekeeli-ui:${MEKEELI_UI_VERSION:-latest}
-    restart: always
- #   depends_on:
-#      - mekeeli-api
+    restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - API_URL=http://mekeeli-api:8000
     healthcheck:
@@ -62,3 +79,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  mekeeli-backup:
+    image: postgres:15
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGUSER=${POSTGRES_USER:-mekeeli}
+      - PGPASSWORD=${POSTGRES_PASSWORD:-mekeeli_pass}
+      - PGDATABASE=${POSTGRES_DB:-mekeeli_db}
+      - BACKUP_DIR=/backups
+      - APP_DATA_DIR=/app-data
+      - UPLOADS_DIR=/uploads-data
+      - OLLAMA_DATA_DIR=/ollama-data
+      - BACKUP_INTERVAL_SECONDS=${BACKUP_INTERVAL_SECONDS:-86400}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
+      - BACKUP_OLLAMA_MODELS=${BACKUP_OLLAMA_MODELS:-true}
+    volumes:
+      - ./scripts/backup_once.sh:/scripts/backup_once.sh:ro
+      - ./scripts/backup_loop.sh:/scripts/backup_loop.sh:ro
+      - ./volumes/backups:/backups
+      - ./volumes/mekeeli_data:/app-data:ro
+      - ./volumes/uploads:/uploads-data:ro
+      - ./volumes/ollama:/ollama-data:ro
+    entrypoint: ["/bin/sh", "/scripts/backup_loop.sh"]

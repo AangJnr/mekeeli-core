@@ -1,5 +1,4 @@
 services:
-  # disable Postgres locally (only runs in prod)
   db:
     image: postgres:15
     restart: unless-stopped
@@ -7,18 +6,24 @@ services:
       - "5432:5432"
     env_file: !reset
       - .env.local
-    environment:  # Use this instead of env_file
+    environment:
       - POSTGRES_USER=mekeeli
       - POSTGRES_PASSWORD=mekeeli_pass
-      - POSTGRES_DB=mekeeli_db # Loads from project root
+      - POSTGRES_DB=mekeeli_db
     volumes:
       - postgres-data-dev:/var/lib/postgresql/data
 
-
-  # Optional: keep ollama for local testing, or comment out to mock
   ollama:
-    profiles: ["prod"]
+    # Run in dev too (no profiles)
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./volumes/ollama:/root/.ollama
 
+  ollama-init:
+    # Reuse the base definition; nothing special needed here
+    volumes:
+      - ./volumes/ollama:/root/.ollama
 
   mekeeli-api:
     build:
@@ -26,22 +31,23 @@ services:
       dockerfile: Dockerfile
     volumes:
       - ./mekeeli-api:/app
-      - ./mekeeli-api/sql.db:/app/sql.db
       - mekeeli-api-venv:/app/.venv
     env_file: !reset
       - ./mekeeli-api/.env.local
     environment:
       - ENVIRONMENT=development
-      - OLLAMA_URL=http://host.docker.internal:11434
+      - OLLAMA_URL=http://ollama:11434
       - PYTHONPATH=/app
-
-    entrypoint: []
-    command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     ports:
       - "8000:8000"
-    depends_on: !reset []
-
-
+    depends_on:
+      db:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
 
   mekeeli-ui:
     build:
@@ -59,7 +65,19 @@ services:
     environment:
       - API_URL=http://mekeeli-api:8000
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+
+  mekeeli-backup:
+    env_file: !reset
+      - .env.local
+    environment:
+      - UPLOADS_DIR=/app-data/uploads
+    volumes:
+      - ./scripts/backup_once.sh:/scripts/backup_once.sh:ro
+      - ./scripts/backup_loop.sh:/scripts/backup_loop.sh:ro
+      - ./volumes/backups:/backups
+      - ./mekeeli-api/data:/app-data:ro
+      - ./volumes/ollama:/ollama-data:ro
 
 volumes:
   mekeeli-api-venv:

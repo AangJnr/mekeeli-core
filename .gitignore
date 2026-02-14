@@ -1,6 +1,22 @@
+# macOS / editor
+.DS_Store
+.idea/
+.vscode/
+*.code-workspace
+
+# Python
 __pycache__/
+*.pyc
 .venv/
+
+# Local env files (keep templates)
 .env
 .env.local
-.code-workspace
-.DS_Store
+.env.*
+!.env.template
+
+# Runtime/stateful local data
+volumes/
+mekeeli-api/data/
+mekeeli-api/uploads/
+mekeeli-api/sql.db
