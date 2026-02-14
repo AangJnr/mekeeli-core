@@ -114,8 +114,8 @@ wait_for_ollama_init_completion() {
   }
 
   if [[ "$verbose_logs" == "true" ]]; then
-    log "Streaming ollama-init logs..."
-    "${COMPOSE_CMD[@]}" logs -f --tail=20 ollama-init &
+    log "Streaming verbose ollama-init logs..."
+    "${COMPOSE_CMD[@]}" logs -f --tail=200 ollama-init &
     log_pid=$!
   fi
 
