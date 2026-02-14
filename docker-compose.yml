@@ -20,28 +20,16 @@ services:
       - "11434:11434"
     volumes:
       - ./volumes/ollama:/root/.ollama
+      - ./ollama-entrypoint.sh:/ollama-entrypoint.sh
+    entrypoint: ["/bin/sh", "/ollama-entrypoint.sh"]
+    environment:
+      - OLLAMA_NO_ANSI=1
     healthcheck:
       # Avoid curl dependency. This succeeds once the Ollama server is actually responding.
       test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
       interval: 10s
       timeout: 5s
       retries: 10
-
-  ollama-init:
-    image: ollama/ollama:latest
-    restart: "no"
-    depends_on:
-      ollama:
-        condition: service_healthy
-    volumes:
-      - ./volumes/ollama:/root/.ollama
-    environment:
-      - OLLAMA_HOST=http://ollama:11434   # talk to the running service
-      - OLLAMA_NO_ANSI=1
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      ollama pull qwen3-vl:4b &&
-      ollama pull embeddinggemma
 
   mekeeli-api:
     image: mekeeli/mekeeli-api:${MEKEELI_API_VERSION:-latest}
@@ -51,8 +39,6 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
-      ollama-init:
-        condition: service_completed_successfully
     env_file: mekeeli-api/.env
     environment:
       - ENVIRONMENT=production
