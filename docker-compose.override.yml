@@ -36,8 +36,7 @@ services:
       - ./mekeeli-api/.env.local
     environment:
       - ENVIRONMENT=development
-      - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11434
       - DATABASE_URL=postgresql+psycopg2://mekeeli:mekeeli_pass@db:5432/mekeeli_db
       - PYTHONPATH=/app
     entrypoint: ["/bin/bash", "/app/entrypoint.sh"]
@@ -67,7 +66,7 @@ services:
     environment:
       - API_URL=http://mekeeli-api:8000
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
 
   mekeeli-backup:
     env_file:

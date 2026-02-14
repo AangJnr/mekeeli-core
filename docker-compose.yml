@@ -39,10 +39,10 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
-    env_file: mekeeli-api/.env
+    env_file: .env
     environment:
       - ENVIRONMENT=production
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_HOST=http://ollama:11434
       - ENABLE_SIGNUP=true
       - DEFAULT_USER_ROLE=pending
     ports:
