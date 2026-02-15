@@ -31,9 +31,7 @@ services:
       - ./volumes/mekeeli_data:/app/data
       - ./volumes/uploads:/app/data/uploads
     env_file:
-      - ./mekeeli-api/.env
       - ./.env.local
-      - ./mekeeli-api/.env.local
     environment:
       - ENVIRONMENT=development
       - OLLAMA_HOST=http://ollama:11434
