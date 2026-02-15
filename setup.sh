@@ -306,6 +306,22 @@ ensure_env_file() {
   exit 1
 }
 
+ensure_env_key() {
+  local file_path="$1"
+  local key="$2"
+  local default_value="$3"
+
+  if [[ ! -f "$file_path" ]]; then
+    return 0
+  fi
+  if grep -Eq "^${key}=" "$file_path"; then
+    return 0
+  fi
+
+  printf '\n%s=%s\n' "$key" "$default_value" >> "$file_path"
+  log "Added missing ${key} to ${file_path}"
+}
+
 ensure_docker_compose() {
   if "${DOCKER_CMD[@]}" compose version >/dev/null 2>&1; then
     COMPOSE_CMD=("${DOCKER_CMD[@]}" compose)
@@ -379,8 +395,8 @@ ensure_docker_compose
 
 ensure_env_file ".env.local" ".env.template"
 ensure_env_file ".env" ".env.local"
-ensure_env_file "mekeeli-api/.env" "mekeeli-api/.env.template"
-ensure_env_file "mekeeli-api/.env.local" "mekeeli-api/.env.template"
+ensure_env_key ".env.local" "SECRET_KEY" "change_me_to_a_long_random_secret"
+ensure_env_key ".env" "SECRET_KEY" "change_me_to_a_long_random_secret"
 
 # Pre-create writable shared data paths under root volumes.
 ensure_writable_dir "volumes/mekeeli_data"

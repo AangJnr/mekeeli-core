@@ -139,10 +139,10 @@ Equivalent helper examples:
 The setup script ensures these files exist:
 - `.env.local` (from `.env.template` if missing)
 - `.env` (from `.env.local` if missing)
-- `mekeeli-api/.env` (from `mekeeli-api/.env.template` if missing)
-- `mekeeli-api/.env.local` (from `mekeeli-api/.env.template` if missing)
 
+Only root env files are used by Compose (`.env` for base, `.env.local` in override).
 If you need custom values, edit those files before running `./setup.sh`.
+Set a strong `SECRET_KEY` in `.env.local` before production use.
 
 ## Automated backups
 
